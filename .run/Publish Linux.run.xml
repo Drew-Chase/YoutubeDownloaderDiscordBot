@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Publish Linux" type="DotNetFolderPublish" factoryName="Publish to folder">
-    <riderPublish configuration="Release" delete_existing_files="true" platform="Any CPU" produce_single_file="true" ready_to_run="true" runtime="linux-x64" self_contained="true" target_folder="$PROJECT_DIR$/YoutubeDownloaderDiscordBot/publish/linux-x64" target_framework="net8.0" trim_unused_assemblies="true" uuid_high="-7321141327912613440" uuid_low="-8301059335090297385" />
+    <riderPublish configuration="Release" delete_existing_files="true" platform="Any CPU" produce_single_file="true" runtime="linux-x64" self_contained="true" target_folder="$PROJECT_DIR$/YoutubeDownloaderDiscordBot/publish/linux-x64" target_framework="net8.0" uuid_high="-7321141327912613440" uuid_low="-8301059335090297385" />
     <method v="2" />
   </configuration>
 </component>
