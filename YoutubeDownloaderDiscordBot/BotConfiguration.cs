@@ -6,5 +6,5 @@ namespace YoutubeDownloaderDiscordBot;
 public sealed class BotConfiguration : AppConfigBase<BotConfiguration>
 {
     [JsonProperty("token")]
-    public string Token { get; set; }
+    public string Token { get; set; } = "";
 }
