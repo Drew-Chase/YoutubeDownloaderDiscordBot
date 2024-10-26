@@ -4,6 +4,8 @@
     <option name="locations">
       <list>
         <option value="$PROJECT_DIR$/YoutubeDownloaderDiscordBot/publish/linux-x64" />
+        <option value="$PROJECT_DIR$/YoutubeDownloaderDiscordBot/publish/win-x64" />
+        <option value="$PROJECT_DIR$/YoutubeDownloaderDiscordBot/publish/linux-arm" />
       </list>
     </option>
   </component>
