@@ -1,5 +1,5 @@
+using System.Diagnostics;
 using Discord;
-using Discord.Interactions;
 using Discord.Net;
 using Discord.WebSocket;
 using Serilog;
@@ -61,9 +61,9 @@ public class BotClient
     private async Task InitializeSlashCommands()
     {
         var command = new SlashCommandBuilder();
-        command.WithName("download")
-            .WithDescription("Download a video from YouTube")
-            .AddOption("url", ApplicationCommandOptionType.String, "The URL of the video to download", true);
+        command.WithName("archive")
+            .WithDescription("Archive a video from YouTube")
+            .AddOption("url", ApplicationCommandOptionType.String, "The URL of the video to archived", true);
 
         try
         {
@@ -76,47 +76,93 @@ public class BotClient
 
         _client.SlashCommandExecuted += async slashCommand =>
         {
-            string? url = slashCommand.Data.Options.FirstOrDefault(option => option.Name == "url")?.Value as string;
-            if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            string method = slashCommand.Data.Options.First().Name;
+            string? query = slashCommand.Data.Options.First().Value as string;
+
+            Log.Information("Received command: {Method} with query: {Query}", method, query);
+
+            switch (method)
             {
-                await slashCommand.RespondAsync("Please provide a valid URL");
+                case "url":
+                    await HandleDownloadQueryCommand(query, slashCommand);
+                    break;
+            }
+        };
+    }
+
+    private async Task HandleDownloadQueryCommand(string? url, SocketSlashCommand slashCommand)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+        {
+            await slashCommand.RespondAsync("Please provide a valid URL");
+            return;
+        }
+
+        try
+        {
+            await slashCommand.DeferAsync(ephemeral: true);
+            Video video = await _youtubeClient.Videos.GetAsync(url);
+            StreamManifest manifest = await _youtubeClient.Videos.Streams.GetManifestAsync(url);
+            string title = video.Title;
+            string author = video.Author.ChannelTitle;
+            var videoOptions = manifest.GetVideoOnlyStreams().GetWithHighestVideoQuality();
+            var audioOptions = manifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            string directory = Path.Combine("youtube.com", $"@{author}");
+            Directory.CreateDirectory(directory);
+            string filenameVideo = Path.Combine(directory, "video.mp4");
+            string filenameAudio = Path.Combine(directory, "audio.mp3");
+            string filenameMuxed = Path.Combine(directory, $"{Chase.CommonLib.Strings.GetValidFileName(video.Title)}.mp4");
+
+            var threads = new Task[2];
+            threads[0] = Task.Run(() => _youtubeClient.Videos.Streams.DownloadAsync(videoOptions, filenameVideo));
+            threads[1] = Task.Run(() => _youtubeClient.Videos.Streams.DownloadAsync(audioOptions, filenameAudio));
+            await Task.WhenAll(threads);
+
+            string command = $"-y -i \"{filenameVideo}\" -i \"{filenameAudio}\" -c:v copy -c:a aac -strict experimental \"{filenameMuxed}\"";
+            Log.Debug("Executing command: {Command}", command);
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = command,
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Environment.CurrentDirectory
+                }
+            };
+            process.Start();
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                Log.Error("Failed to mux video and audio");
+                await slashCommand.FollowupAsync("Failed to mux video and audio", ephemeral: true);
                 return;
             }
 
-            try
-            {
-                await slashCommand.DeferAsync(ephemeral: true);
-                Video video = await _youtubeClient.Videos.GetAsync(url);
-                StreamManifest manifest = await _youtubeClient.Videos.Streams.GetManifestAsync(video.Id);
-                string title = video.Title;
-                string author = video.Author.ChannelTitle;
-                var duration = video.Duration;
-                string[] qualityOptions = manifest.GetMuxedStreams().Select(i => i.VideoQuality.Label).ToArray();
-
-                SelectMenuComponent? qualitySelection = new SelectMenuBuilder()
-                    .WithCustomId("quality_selection")
-                    .WithPlaceholder("Select quality")
-                    .WithOptions(qualityOptions.Select(option => new SelectMenuOptionBuilder()
-                        .WithLabel(option)
-                        .WithValue(option)).ToList())
-                    .Build();
+            File.Delete(filenameVideo);
+            File.Delete(filenameAudio);
 
 
-                var embed = new EmbedBuilder()
-                    .WithTitle(title)
-                    .WithDescription($"By {author}")
-                    .WithFooter($"Duration: {duration}")
-                    .WithColor(Color.Red)
-                    .WithUrl(url)
-                    .WithImageUrl(video.Thumbnails.OrderByDescending(i => i.Resolution.Area).First().Url) // Get the highest resolution thumbnail
-                    .Build();
-                await slashCommand.RespondAsync("Select the quality of the video", embeds: [embed], ephemeral:true);
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Failed to download video");
-                await slashCommand.RespondAsync("Failed to download video");
-            }
-        };
+            var embed = new EmbedBuilder()
+                .WithTitle(title)
+                .WithDescription($"By {author}")
+                .WithFooter("Has been archived successfully!")
+                .WithColor(Color.Green)
+                .WithUrl(url)
+                .WithImageUrl(video.Thumbnails.OrderByDescending(i => i.Resolution.Area).First().Url) // Get the highest resolution thumbnail
+                .WithFields()
+                .Build();
+
+            await slashCommand.FollowupAsync(
+                embeds: [embed],
+                ephemeral: true
+            );
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to download video");
+            await slashCommand.FollowupAsync("Failed to download video");
+        }
     }
 }
