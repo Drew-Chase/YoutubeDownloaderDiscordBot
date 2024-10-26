@@ -109,16 +109,17 @@ public class BotClient
             var audioOptions = manifest.GetAudioOnlyStreams().GetWithHighestBitrate();
             string directory = Path.Combine("youtube.com", $"@{author}");
             Directory.CreateDirectory(directory);
-            string filenameVideo = Path.Combine(directory, "video.mp4");
-            string filenameAudio = Path.Combine(directory, "audio.mp3");
+            string filenameVideo = Path.Combine(directory, $"{video.Id}.mp4");
+            string filenameAudio = Path.Combine(directory, $"{video.Id}.mp3");
             string filenameMuxed = Path.Combine(directory, $"{Chase.CommonLib.Strings.GetValidFileName(video.Title)}.mp4");
 
             var threads = new Task[2];
             threads[0] = Task.Run(() => _youtubeClient.Videos.Streams.DownloadAsync(videoOptions, filenameVideo));
             threads[1] = Task.Run(() => _youtubeClient.Videos.Streams.DownloadAsync(audioOptions, filenameAudio));
             await Task.WhenAll(threads);
+            await Task.Delay(TimeSpan.FromSeconds(1));
 
-            string command = $"-y -i \"{filenameVideo}\" -i \"{filenameAudio}\" -c:v copy -c:a aac -strict experimental \"{filenameMuxed}\"";
+            string command = $"-hide_banner -y -i \"{filenameVideo}\" -i \"{filenameAudio}\" -c:v copy -c:a aac -strict experimental \"{filenameMuxed}\"";
             Log.Debug("Executing command: {Command}", command);
             var process = new Process
             {
